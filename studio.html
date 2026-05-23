@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AR Studio</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  --ink: #1c1208;
+  --ink2: #2a1d10;
+  --parchment: #e8d8b0;
+  --parchment2: #d4c090;
+  --aged: #a08040;
+  --gold: #c8960a;
+  --red: #8b2020;
+  --red-light: #c43030;
+  --green: #2a7c4a;
+  --build: #4a6fa5;
+  --play: #2a7c4a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Crimson Text', Georgia, serif;
+  background: var(--ink);
+  color: var(--parchment);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ════════════════════════════════
+   TOP BAR
+════════════════════════════════ */
+#topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 30;
+  background: linear-gradient(to bottom, var(--ink) 0%, rgba(28,18,8,0.95) 80%, transparent 100%);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#scenario-select {
+  flex: 1;
+  background: var(--ink2);
+  color: var(--parchment);
+  border: 1px solid var(--aged);
+  padding: 7px 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.icon-btn {
+  background: var(--ink2);
+  border: 1px solid var(--aged);
+  color: var(--parchment);
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--aged); color: var(--ink); }
+.icon-btn:active { transform: scale(0.95); }
+
+/* MODE TOGGLE */
+.mode-toggle {
+  display: flex;
+  background: var(--ink2);
+  border: 1px solid var(--aged);
+  height: 36px;
+  flex-shrink: 0;
+}
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--parchment2);
+  padding: 0 14px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.mode-btn.active.build { background: var(--build); color: white; }
+.mode-btn.active.play { background: var(--play); color: white; }
+
+/* ════════════════════════════════
+   MAP
+════════════════════════════════ */
+#map {
+  position: absolute;
+  inset: 52px 0 0 0;
+  z-index: 1;
+}
+
+.leaflet-tile {
+  filter: sepia(0.6) contrast(0.9) brightness(0.95) saturate(0.7);
+}
+
+.leaflet-control-zoom a {
+  background: rgba(28,18,8,0.85) !important;
+  color: var(--parchment) !important;
+  border: 1px solid var(--aged) !important;
+}
+.leaflet-control-attribution { display: none; }
+
+/* PLAYER MARKER */
+.player-dot {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(200,150,10,0.6);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(200,150,10,0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(200,150,10,0.3), 0 0 22px rgba(200,150,10,0.25); }
+}
+
+/* LOCATION MARKER (build mode) */
+.loc-marker {
+  width: 32px;
+  height: 38px;
+  position: relative;
+  cursor: pointer;
+}
+.loc-pin {
+  width: 28px; height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--build);
+  border: 2px solid var(--ink);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  position: absolute;
+  left: 2px;
+  top: 0;
+}
+.loc-pin-text {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 32px;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  color: var(--parchment);
+  font-weight: 700;
+  z-index: 2;
+  pointer-events: none;
+}
+.loc-marker.play .loc-pin { background: var(--red); }
+.loc-marker.visited .loc-pin { background: var(--aged); }
+.loc-marker.locked .loc-pin { background: var(--ink2); border-style: dashed; opacity: 0.6; }
+.loc-marker.locked .loc-pin-text { color: var(--aged); }
+
+/* GEOFENCE RADIUS */
+.geofence-ring {
+  border: 2px dashed var(--build);
+  border-radius: 50%;
+  background: rgba(74,111,165,0.08);
+  pointer-events: none;
+}
+
+/* ════════════════════════════════
+   FAB (floating action button) - build mode
+════════════════════════════════ */
+#fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--build);
+  color: white;
+  border: 3px solid var(--ink);
+  font-size: 1.8rem;
+  cursor: pointer;
+  z-index: 25;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#fab:hover { transform: scale(1.05); }
+#fab:active { transform: scale(0.95); }
+#fab.hidden { display: none; }
+
+/* ════════════════════════════════
+   STATUS BAR
+════════════════════════════════ */
+#status-bar {
+  position: fixed;
+  top: 60px;
+  left: 12px;
+  z-index: 20;
+  background: rgba(28,18,8,0.85);
+  border: 1px solid var(--aged);
+  padding: 5px 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.55rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--parchment2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--aged);
+}
+.status-dot.active { background: #4a9; animation: blink 1.5s infinite; }
+.status-dot.error { background: var(--red); }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ════════════════════════════════
+   MODAL / SHEET (location editor)
+════════════════════════════════ */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+  display: none;
+}
+.sheet-backdrop.visible { display: block; }
+
+.sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 85vh;
+  background: var(--ink);
+  border-top: 2px solid var(--aged);
+  z-index: 50;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+.sheet.visible { transform: translateY(0); }
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--aged);
+  gap: 10px;
+}
+.sheet-title {
+  flex: 1;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+.sheet-close {
+  background: transparent;
+  border: 1px solid var(--aged);
+  color: var(--parchment);
+  width: 32px; height: 32px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* FORM */
+.form-row { margin-bottom: 14px; }
+.form-row label {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--aged);
+  margin-bottom: 5px;
+}
+.form-row input, .form-row select, .form-row textarea {
+  width: 100%;
+  background: var(--ink2);
+  color: var(--parchment);
+  border: 1px solid var(--aged);
+  padding: 8px 10px;
+  font-family: 'Crimson Text', serif;
+  font-size: 0.95rem;
+}
+.form-row textarea { resize: vertical; min-height: 60px; }
+.form-row .row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--aged);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* BUTTONS */
+.btn {
+  background: var(--parchment);
+  color: var(--ink);
+  border: none;
+  padding: 9px 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--gold); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-danger { background: var(--red); color: var(--parchment); }
+.btn-danger:hover { background: var(--red-light); }
+.btn-success { background: var(--green); color: white; }
+.btn-secondary {
+  background: transparent;
+  color: var(--parchment);
+  border: 1px solid var(--aged);
+}
+.btn-secondary:hover { background: var(--aged); color: var(--ink); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-block { width: 100%; padding: 12px; }
+
+/* SEGMENTS LIST */
+.segments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+.segments-header h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+.segment-item {
+  border: 1px solid var(--aged);
+  background: rgba(232,216,176,0.03);
+  padding: 10px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.segment-info { flex: 1; min-width: 0; }
+.segment-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+  margin-bottom: 2px;
+}
+.segment-meta {
+  font-size: 0.78rem;
+  color: var(--parchment2);
+  font-style: italic;
+}
+.segment-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.seg-mini-btn {
+  background: transparent;
+  border: 1px solid var(--aged);
+  color: var(--parchment);
+  width: 32px; height: 32px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seg-mini-btn:hover { background: var(--aged); color: var(--ink); }
+.seg-mini-btn.danger { color: var(--red-light); border-color: var(--red); }
+.seg-mini-btn.danger:hover { background: var(--red); color: white; }
+
+/* RECORDING UI */
+#record-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+#record-modal.visible { display: flex; }
+
+#record-modal h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.record-label-input {
+  width: 100%;
+  max-width: 360px;
+  background: var(--ink2);
+  color: var(--parchment);
+  border: 1px solid var(--aged);
+  padding: 10px;
+  font-family: 'Crimson Text', serif;
+  font-size: 1rem;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.record-circle {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: var(--red);
+  color: white;
+  border: 4px solid var(--ink);
+  font-size: 2.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+  transition: all 0.2s;
+  box-shadow: 0 0 0 6px rgba(139,32,32,0.3);
+}
+.record-circle.recording {
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%,100% { box-shadow: 0 0 0 6px rgba(139,32,32,0.3); }
+  50% { box-shadow: 0 0 0 14px rgba(139,32,32,0.5); }
+}
+.record-circle:active { transform: scale(0.95); }
+
+.record-timer {
+  font-family: 'Cinzel', serif;
+  font-size: 2rem;
+  color: var(--parchment);
+  letter-spacing: 0.1em;
+  margin: 10px 0;
+}
+
+#record-preview {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  width: 100%;
+  max-width: 360px;
+}
+#record-preview.visible { display: flex; }
+#record-preview audio { width: 100%; }
+
+/* PLAY MODE - ACTIVE LOCATION SHEET */
+#play-sheet {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--ink);
+  border-top: 2px solid var(--gold);
+  z-index: 55;
+  padding: 20px 16px 28px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+#play-sheet.visible { transform: translateY(0); }
+
+#play-location-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  color: var(--aged);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+#play-chapter-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  color: var(--parchment);
+  margin-bottom: 14px;
+}
+#play-speaker {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  margin-bottom: 8px;
+  min-height: 1em;
+}
+#play-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ink2);
+  padding: 10px;
+}
+.play-btn-big {
+  width: 50px; height: 50px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+  font-size: 1.2rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.play-btn-big:hover { background: var(--gold); color: var(--ink); }
+#play-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#play-progress-fill {
+  height: 100%;
+  background: var(--gold);
+  width: 0%;
+  transition: width 0.3s linear;
+}
+#play-counter {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  color: var(--aged);
+}
+
+/* TOAST */
+#toast {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--ink2);
+  border: 1px solid var(--gold);
+  color: var(--parchment);
+  padding: 10px 18px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  z-index: 100;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+}
+#toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* EMPTY STATE */
+#empty-state {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 15;
+  padding: 24px;
+  max-width: 320px;
+  display: none;
+}
+#empty-state.visible { display: block; }
+#empty-state h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.4rem;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+#empty-state p {
+  color: var(--parchment2);
+  font-size: 0.95rem;
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+/* CONFIRM DIALOG */
+.confirm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ink);
+  border: 1px solid var(--aged);
+  padding: 20px;
+  z-index: 90;
+  max-width: 320px;
+  width: 90%;
+  display: none;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.confirm-dialog.visible { display: block; }
+.confirm-dialog h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.confirm-dialog p { color: var(--parchment2); margin-bottom: 16px; }
+.confirm-dialog .btn-row { justify-content: flex-end; }
+
+/* DRAG HANDLE */
+.drag-handle {
+  cursor: grab;
+  color: var(--aged);
+  padding: 0 4px;
+  user-select: none;
+}
+.segment-item.dragging { opacity: 0.4; }
+.segment-item.drag-over { border-color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <select id="scenario-select" onchange="onScenarioChange()"></select>
+  <button class="icon-btn" onclick="openScenarioMenu()" title="Scenario menu">⋯</button>
+  <div class="mode-toggle">
+    <button class="mode-btn build active" id="btn-mode-build" onclick="setMode('build')">Bouw</button>
+    <button class="mode-btn play" id="btn-mode-play" onclick="setMode('play')">Speel</button>
+  </div>
+</div>
+
+<!-- STATUS -->
+<div id="status-bar">
+  <div class="status-dot" id="gps-dot"></div>
+  <span id="gps-label">Positie zoeken</span>
+</div>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- EMPTY STATE -->
+<div id="empty-state">
+  <h2>Welkom in de Studio</h2>
+  <p>Maak een nieuw scenario om te beginnen. Je kunt in dit project locaties toevoegen, audio opnemen en alles in de praktijk testen.</p>
+  <button class="btn btn-block" onclick="createScenarioPrompt()">+ Nieuw scenario</button>
+</div>
+
+<!-- FAB -->
+<button id="fab" onclick="addLocationHere()" title="Voeg locatie toe op huidige GPS-positie">+</button>
+
+<!-- LOCATION EDIT SHEET -->
+<div class="sheet-backdrop" id="sheet-backdrop" onclick="closeSheet()"></div>
+<div class="sheet" id="location-sheet">
+  <div class="sheet-header">
+    <div class="sheet-title" id="sheet-title">Locatie bewerken</div>
+    <button class="sheet-close" onclick="closeSheet()">×</button>
+  </div>
+  <div class="sheet-body" id="sheet-body">
+    <!-- gevuld door renderLocationSheet() -->
+  </div>
+</div>
+
+<!-- RECORD MODAL -->
+<div id="record-modal">
+  <h2 id="record-title">Opname</h2>
+  <input type="text" class="record-label-input" id="record-label" placeholder="Wie spreekt? (bv. Verteller, Mieke...)">
+  <button class="record-circle" id="record-circle" onclick="toggleRecording()">●</button>
+  <div class="record-timer" id="record-timer">00:00</div>
+  <div id="record-preview">
+    <audio id="record-audio" controls></audio>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="discardRecording()">Opnieuw</button>
+      <button class="btn btn-success" onclick="saveRecording()">Bewaren</button>
+    </div>
+  </div>
+  <button class="btn btn-secondary" style="margin-top:24px" onclick="cancelRecording()">Annuleren</button>
+</div>
+
+<!-- PLAY SHEET -->
+<div id="play-sheet">
+  <div id="play-location-name">—</div>
+  <div id="play-chapter-title">—</div>
+  <div id="play-speaker"></div>
+  <div id="play-controls">
+    <button class="play-btn-big" id="play-btn" onclick="playToggle()">▶</button>
+    <div id="play-progress-bar"><div id="play-progress-fill"></div></div>
+    <div id="play-counter">0/0</div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-dialog" id="confirm-dialog">
+  <h3 id="confirm-title">Bevestig</h3>
+  <p id="confirm-message"></p>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="confirmCancel()">Annuleren</button>
+    <button class="btn btn-danger" id="confirm-ok" onclick="confirmOk()">OK</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// AR STUDIO v1.0
+// ═══════════════════════════════════════════════════════════════
+
+// STATE
+let db = null;
+let scenarios = []; // {id, title, subtitle, locations: [...], updatedAt}
+let currentScenarioId = null;
+let mode = 'build'; // 'build' or 'play'
+let map = null;
+let playerMarker = null;
+let playerPos = null;
+let locationMarkers = {}; // id → leaflet marker
+let geofenceCircles = {}; // id → leaflet circle (build mode visual)
+let editingLocationId = null;
+let recordingState = {
+  recorder: null,
+  chunks: [],
+  startTime: null,
+  timerInterval: null,
+  blob: null,
+  targetLocationId: null
+};
+
+// PLAY MODE STATE
+let visitedIds = new Set();
+let unlockedIds = new Set();
+let activePlayLocation = null;
+let playSegmentIdx = 0;
+let currentAudio = null;
+let playProgressTimer = null;
+let currentAudioUrl = null;
+
+// ───────────────────────────────────────────────
+// INDEXEDDB
+// ───────────────────────────────────────────────
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('arstudio', 2);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('scenarios')) {
+        db.createObjectStore('scenarios', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('audio')) {
+        db.createObjectStore('audio', { keyPath: 'id' });
+      }
+    };
+  });
+}
+
+function dbTx(storeName, mode = 'readonly') {
+  return db.transaction(storeName, mode).objectStore(storeName);
+}
+
+function dbGet(storeName, id) {
+  return new Promise((resolve, reject) => {
+    const req = dbTx(storeName).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAll(storeName) {
+  return new Promise((resolve, reject) => {
+    const req = dbTx(storeName).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbPut(storeName, obj) {
+  return new Promise((resolve, reject) => {
+    const req = dbTx(storeName, 'readwrite').put(obj);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbDelete(storeName, id) {
+  return new Promise((resolve, reject) => {
+    const req = dbTx(storeName, 'readwrite').delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ───────────────────────────────────────────────
+// SCENARIOS
+// ───────────────────────────────────────────────
+async function loadScenarios() {
+  scenarios = await dbGetAll('scenarios');
+  scenarios.sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+  renderScenarioSelect();
+  if (scenarios.length === 0) {
+    document.getElementById('empty-state').classList.add('visible');
+    document.getElementById('fab').classList.add('hidden');
+  } else {
+    document.getElementById('empty-state').classList.remove('visible');
+    if (!currentScenarioId || !scenarios.find(s=>s.id===currentScenarioId)) {
+      currentScenarioId = scenarios[0].id;
+    }
+    document.getElementById('scenario-select').value = currentScenarioId;
+    renderMap();
+    updateFabVisibility();
+  }
+}
+
+function renderScenarioSelect() {
+  const sel = document.getElementById('scenario-select');
+  sel.innerHTML = '';
+  if (scenarios.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = '— Geen scenario\'s —';
+    sel.appendChild(opt);
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  scenarios.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.title || '(zonder titel)';
+    sel.appendChild(opt);
+  });
+}
+
+function getCurrentScenario() {
+  return scenarios.find(s => s.id === currentScenarioId);
+}
+
+async function saveCurrentScenario() {
+  const s = getCurrentScenario();
+  if (!s) return;
+  s.updatedAt = Date.now();
+  await dbPut('scenarios', s);
+}
+
+async function createScenarioPrompt() {
+  const title = prompt('Naam van het nieuwe scenario:', '');
+  if (!title || !title.trim()) return;
+  const subtitle = prompt('Ondertitel (optioneel):', '') || '';
+  const scenario = {
+    id: 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2,8),
+    title: title.trim(),
+    subtitle: subtitle.trim(),
+    locations: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  await dbPut('scenarios', scenario);
+  currentScenarioId = scenario.id;
+  await loadScenarios();
+  toast('Scenario aangemaakt');
+}
+
+async function renameScenarioPrompt() {
+  const s = getCurrentScenario();
+  if (!s) return;
+  const newTitle = prompt('Nieuwe titel:', s.title);
+  if (!newTitle || !newTitle.trim()) return;
+  s.title = newTitle.trim();
+  const newSub = prompt('Nieuwe ondertitel:', s.subtitle || '');
+  if (newSub !== null) s.subtitle = newSub.trim();
+  await saveCurrentScenario();
+  await loadScenarios();
+  toast('Hernoemd');
+}
+
+async function duplicateScenario() {
+  const s = getCurrentScenario();
+  if (!s) return;
+  // Diepe kopie maken, maar audio-blobs delen via id (we kopiëren niet de audio zelf)
+  const newScenario = JSON.parse(JSON.stringify(s));
+  newScenario.id = 'sc-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+  newScenario.title = s.title + ' (kopie)';
+  newScenario.createdAt = Date.now();
+  newScenario.updatedAt = Date.now();
+  // Audio-id's blijven hetzelfde — beide scenario's wijzen naar dezelfde audio-blobs.
+  // Voor MVP is dat OK.
+  await dbPut('scenarios', newScenario);
+  currentScenarioId = newScenario.id;
+  await loadScenarios();
+  toast('Gedupliceerd');
+}
+
+async function deleteScenarioConfirm() {
+  const s = getCurrentScenario();
+  if (!s) return;
+  showConfirm('Scenario verwijderen?', `"${s.title}" wordt definitief verwijderd. Audio-opnames blijven in de browser staan (kunnen later opgeruimd worden).`, async () => {
+    await dbDelete('scenarios', s.id);
+    currentScenarioId = null;
+    await loadScenarios();
+    if (scenarios.length === 0) {
+      clearMap();
+    }
+    toast('Verwijderd');
+  });
+}
+
+function openScenarioMenu() {
+  // Eenvoudig menu via prompt
+  if (scenarios.length === 0) {
+    createScenarioPrompt();
+    return;
+  }
+  const action = prompt('Wat wil je doen?\n1 = Nieuw scenario\n2 = Hernoem dit scenario\n3 = Dupliceer dit scenario\n4 = Verwijder dit scenario', '1');
+  if (action === '1') createScenarioPrompt();
+  else if (action === '2') renameScenarioPrompt();
+  else if (action === '3') duplicateScenario();
+  else if (action === '4') deleteScenarioConfirm();
+}
+
+function onScenarioChange() {
+  currentScenarioId = document.getElementById('scenario-select').value;
+  // Reset play state
+  visitedIds.clear();
+  unlockedIds.clear();
+  activePlayLocation = null;
+  closePlaySheet();
+  renderMap();
+}
+
+// ───────────────────────────────────────────────
+// MAP
+// ───────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', {
+    zoomControl: true,
+    attributionControl: false
+  }).setView([51.5650, 5.0930], 16);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
+
+  // Tap on map in build mode = add location at that point
+  map.on('click', (e) => {
+    if (mode !== 'build') return;
+    if (!getCurrentScenario()) return;
+    addLocationAt(e.latlng.lat, e.latlng.lng);
+  });
+}
+
+function clearMap() {
+  Object.values(locationMarkers).forEach(m => map.removeLayer(m));
+  Object.values(geofenceCircles).forEach(c => map.removeLayer(c));
+  locationMarkers = {};
+  geofenceCircles = {};
+}
+
+function renderMap() {
+  clearMap();
+  const s = getCurrentScenario();
+  if (!s) return;
+  s.locations.forEach((loc, idx) => addLocationMarker(loc, idx));
+}
+
+function addLocationMarker(loc, idx) {
+  const isVisited = visitedIds.has(loc.id);
+  const isUnlocked = mode === 'build' || unlockedIds.has(loc.id) || idx === 0; // in build alles zichtbaar
+  const showLocked = mode === 'play' && !isUnlocked;
+
+  const el = document.createElement('div');
+  el.className = 'loc-marker' + (mode === 'play' ? ' play' : '') + (isVisited ? ' visited' : '') + (showLocked ? ' locked' : '');
+  el.innerHTML = `
+    <div class="loc-pin"></div>
+    <div class="loc-pin-text">${showLocked ? '?' : (idx+1)}</div>
+  `;
+
+  const icon = L.divIcon({ html: el, className: '', iconSize: [32, 38], iconAnchor: [16, 38] });
+  const marker = L.marker([loc.lat, loc.lng], { icon, draggable: mode === 'build' }).addTo(map);
+  marker.on('click', () => onLocationClick(loc.id));
+  if (mode === 'build') {
+    marker.on('dragend', async (e) => {
+      const ll = e.target.getLatLng();
+      loc.lat = ll.lat;
+      loc.lng = ll.lng;
+      await saveCurrentScenario();
+      updateGeofenceCircle(loc);
+      toast('Locatie verplaatst');
+    });
+  }
+  locationMarkers[loc.id] = marker;
+
+  // Geofence circle in build mode
+  if (mode === 'build') {
+    const circle = L.circle([loc.lat, loc.lng], {
+      radius: loc.radius || 25,
+      className: 'geofence-ring',
+      stroke: false,
+      fillOpacity: 0.08,
+      color: '#4a6fa5'
+    }).addTo(map);
+    geofenceCircles[loc.id] = circle;
+  }
+}
+
+function updateGeofenceCircle(loc) {
+  if (geofenceCircles[loc.id]) {
+    geofenceCircles[loc.id].setLatLng([loc.lat, loc.lng]);
+    geofenceCircles[loc.id].setRadius(loc.radius || 25);
+  }
+}
+
+// ───────────────────────────────────────────────
+// GPS
+// ───────────────────────────────────────────────
+function initGPS() {
+  if (!navigator.geolocation) {
+    setGPSStatus('error', 'Geen GPS');
+    return;
+  }
+  setGPSStatus('searching', 'Positie zoeken');
+  navigator.geolocation.watchPosition(onPosition, onGPSError, {
+    enableHighAccuracy: true,
+    maximumAge: 3000,
+    timeout: 10000
+  });
+}
+
+function onPosition(pos) {
+  playerPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+  setGPSStatus('active', `±${Math.round(playerPos.acc)}m`);
+  updatePlayerMarker();
+  if (mode === 'play') {
+    checkGeofences();
+  }
+}
+
+function onGPSError() {
+  setGPSStatus('error', 'GPS fout');
+}
+
+function setGPSStatus(state, label) {
+  const dot = document.getElementById('gps-dot');
+  dot.className = 'status-dot';
+  if (state === 'active') dot.classList.add('active');
+  if (state === 'error') dot.classList.add('error');
+  document.getElementById('gps-label').textContent = label;
+}
+
+function updatePlayerMarker() {
+  if (!playerPos) return;
+  if (!playerMarker) {
+    const el = document.createElement('div');
+    el.className = 'player-dot';
+    const icon = L.divIcon({ html: el, className: '', iconSize: [18,18], iconAnchor: [9,9] });
+    playerMarker = L.marker([playerPos.lat, playerPos.lng], { icon, zIndexOffset: 1000 }).addTo(map);
+    // Recenter map first time
+    map.setView([playerPos.lat, playerPos.lng], 17);
+  } else {
+    playerMarker.setLatLng([playerPos.lat, playerPos.lng]);
+  }
+}
+
+// ───────────────────────────────────────────────
+// LOCATIONS
+// ───────────────────────────────────────────────
+function newLocationId() {
+  return 'loc-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+}
+
+async function addLocationHere() {
+  if (!playerPos) {
+    toast('Geen GPS — tik op de kaart in plaats daarvan');
+    return;
+  }
+  await addLocationAt(playerPos.lat, playerPos.lng);
+}
+
+async function addLocationAt(lat, lng) {
+  const s = getCurrentScenario();
+  if (!s) {
+    toast('Maak eerst een scenario');
+    return;
+  }
+  const loc = {
+    id: newLocationId(),
+    name: `Locatie ${s.locations.length + 1}`,
+    chapter: '',
+    chapterTitle: '',
+    lat: lat,
+    lng: lng,
+    radius: 25,
+    segments: [],
+    unlocks: []
+  };
+  s.locations.push(loc);
+  await saveCurrentScenario();
+  renderMap();
+  // Open de editor meteen
+  openLocationSheet(loc.id);
+}
+
+function onLocationClick(locId) {
+  if (mode === 'build') {
+    openLocationSheet(locId);
+  } else {
+    // Play mode: alleen als unlocked
+    const s = getCurrentScenario();
+    const loc = s.locations.find(l => l.id === locId);
+    if (!loc) return;
+    const idx = s.locations.indexOf(loc);
+    const isUnlocked = unlockedIds.has(locId) || idx === 0;
+    if (!isUnlocked) {
+      toast('Locatie nog niet ontgrendeld');
+      return;
+    }
+    activatePlayLocation(loc);
+  }
+}
+
+// ───────────────────────────────────────────────
+// LOCATION SHEET (edit)
+// ───────────────────────────────────────────────
+function openLocationSheet(locId) {
+  editingLocationId = locId;
+  renderLocationSheet();
+  document.getElementById('sheet-backdrop').classList.add('visible');
+  document.getElementById('location-sheet').classList.add('visible');
+}
+
+function closeSheet() {
+  document.getElementById('sheet-backdrop').classList.remove('visible');
+  document.getElementById('location-sheet').classList.remove('visible');
+  editingLocationId = null;
+}
+
+function renderLocationSheet() {
+  const s = getCurrentScenario();
+  const loc = s.locations.find(l => l.id === editingLocationId);
+  if (!loc) { closeSheet(); return; }
+
+  const idx = s.locations.indexOf(loc);
+  document.getElementById('sheet-title').textContent = `Locatie ${idx+1}: ${loc.name}`;
+
+  const body = document.getElementById('sheet-body');
+  body.innerHTML = `
+    <div class="form-row">
+      <label>Naam</label>
+      <input type="text" id="ed-name" value="${escapeHtml(loc.name)}" oninput="updateField('name', this.value)">
+    </div>
+    <div class="form-row">
+      <div class="row-2col">
+        <div>
+          <label>Hoofdstuk</label>
+          <input type="text" id="ed-chapter" value="${escapeHtml(loc.chapter||'')}" oninput="updateField('chapter', this.value)" placeholder="Hoofdstuk I">
+        </div>
+        <div>
+          <label>Titel</label>
+          <input type="text" id="ed-chapterTitle" value="${escapeHtml(loc.chapterTitle||'')}" oninput="updateField('chapterTitle', this.value)" placeholder="De ontmoeting">
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="row-2col">
+        <div>
+          <label>Geofence radius (m)</label>
+          <input type="number" min="10" max="200" value="${loc.radius||25}" oninput="updateField('radius', parseInt(this.value)||25); updateGeofenceCircle(getLoc())">
+        </div>
+        <div>
+          <label>GPS coördinaten</label>
+          <input type="text" value="${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}" readonly style="font-size:0.75rem;font-family:monospace">
+        </div>
+      </div>
+      <div class="form-hint">Verplaats de pin op de kaart om de positie aan te passen</div>
+    </div>
+
+    <div class="form-row">
+      <label>Ontgrendelt na voltooiing</label>
+      <div id="unlocks-list"></div>
+    </div>
+
+    <div class="segments-header">
+      <h3>Audiofragmenten (${loc.segments.length})</h3>
+      <button class="btn btn-success" onclick="startRecording('${loc.id}')">🎙 Opnemen</button>
+    </div>
+
+    <div id="segments-list"></div>
+
+    <div style="margin-top:24px;border-top:1px solid var(--aged);padding-top:16px">
+      <button class="btn btn-danger btn-block" onclick="deleteLocationConfirm()">Verwijder deze locatie</button>
+    </div>
+  `;
+
+  renderUnlocksSelector(loc);
+  renderSegmentsList(loc);
+}
+
+function getLoc() {
+  const s = getCurrentScenario();
+  return s.locations.find(l => l.id === editingLocationId);
+}
+
+function updateField(field, value) {
+  const loc = getLoc();
+  if (!loc) return;
+  loc[field] = value;
+  saveCurrentScenario();
+}
+
+function renderUnlocksSelector(loc) {
+  const s = getCurrentScenario();
+  const others = s.locations.filter(l => l.id !== loc.id);
+  const container = document.getElementById('unlocks-list');
+  if (others.length === 0) {
+    container.innerHTML = '<div class="form-hint">Voeg meer locaties toe om unlocks te kunnen instellen</div>';
+    return;
+  }
+  container.innerHTML = others.map((other, i) => {
+    const checked = (loc.unlocks||[]).includes(other.id) ? 'checked' : '';
+    const idx = s.locations.indexOf(other);
+    return `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+        <input type="checkbox" ${checked} onchange="toggleUnlock('${other.id}', this.checked)" style="width:16px;height:16px">
+        <span style="font-family:'Cinzel',serif;font-size:0.7rem;color:var(--gold)">${idx+1}.</span>
+        <span style="font-size:0.85rem">${escapeHtml(other.name)}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+function toggleUnlock(otherId, checked) {
+  const loc = getLoc();
+  if (!loc) return;
+  if (!loc.unlocks) loc.unlocks = [];
+  if (checked) {
+    if (!loc.unlocks.includes(otherId)) loc.unlocks.push(otherId);
+  } else {
+    loc.unlocks = loc.unlocks.filter(id => id !== otherId);
+  }
+  saveCurrentScenario();
+}
+
+function renderSegmentsList(loc) {
+  const container = document.getElementById('segments-list');
+  if (loc.segments.length === 0) {
+    container.innerHTML = '<div class="form-hint" style="padding:12px;border:1px dashed var(--aged);text-align:center">Nog geen opnames. Tik op "Opnemen" om er eentje te maken.</div>';
+    return;
+  }
+  container.innerHTML = loc.segments.map((seg, i) => `
+    <div class="segment-item" draggable="true" data-idx="${i}"
+      ondragstart="dragStart(event, ${i})"
+      ondragover="dragOver(event)"
+      ondrop="dragDrop(event, ${i})"
+      ondragend="dragEnd(event)"
+    >
+      <span class="drag-handle">≡</span>
+      <div class="segment-info">
+        <div class="segment-label">${escapeHtml(seg.speakerLabel || 'Verteller')}</div>
+        <div class="segment-meta">Fragment ${i+1} · ${seg.durationSec || '?'}s</div>
+      </div>
+      <div class="segment-actions">
+        <button class="seg-mini-btn" onclick="playSegmentPreview('${seg.audioId}')" title="Afspelen">▶</button>
+        <button class="seg-mini-btn" onclick="renameSegmentPrompt(${i})" title="Naam wijzigen">✎</button>
+        <button class="seg-mini-btn danger" onclick="deleteSegmentConfirm(${i})" title="Verwijderen">×</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// DRAG-DROP voor segmenten
+let dragSourceIdx = null;
+function dragStart(e, idx) {
+  dragSourceIdx = idx;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function dragDrop(e, idx) {
+  e.preventDefault();
+  if (dragSourceIdx === null || dragSourceIdx === idx) return;
+  const loc = getLoc();
+  if (!loc) return;
+  const [moved] = loc.segments.splice(dragSourceIdx, 1);
+  loc.segments.splice(idx, 0, moved);
+  saveCurrentScenario();
+  renderSegmentsList(loc);
+}
+function dragEnd(e) {
+  e.target.classList.remove('dragging');
+  dragSourceIdx = null;
+}
+
+function renameSegmentPrompt(idx) {
+  const loc = getLoc();
+  if (!loc) return;
+  const seg = loc.segments[idx];
+  const newLabel = prompt('Spreker-label:', seg.speakerLabel || 'Verteller');
+  if (newLabel === null) return;
+  seg.speakerLabel = newLabel.trim() || 'Verteller';
+  saveCurrentScenario();
+  renderSegmentsList(loc);
+}
+
+function deleteSegmentConfirm(idx) {
+  const loc = getLoc();
+  if (!loc) return;
+  const seg = loc.segments[idx];
+  showConfirm('Fragment verwijderen?', `"${seg.speakerLabel}" — fragment ${idx+1}`, async () => {
+    // Verwijder audio uit IndexedDB
+    if (seg.audioId) await dbDelete('audio', seg.audioId);
+    loc.segments.splice(idx, 1);
+    await saveCurrentScenario();
+    renderSegmentsList(loc);
+    toast('Verwijderd');
+  });
+}
+
+function deleteLocationConfirm() {
+  const loc = getLoc();
+  if (!loc) return;
+  showConfirm('Locatie verwijderen?', `"${loc.name}" en alle ${loc.segments.length} fragmenten worden verwijderd.`, async () => {
+    // Verwijder alle audio
+    for (const seg of loc.segments) {
+      if (seg.audioId) await dbDelete('audio', seg.audioId);
+    }
+    const s = getCurrentScenario();
+    s.locations = s.locations.filter(l => l.id !== loc.id);
+    // Verwijder ook uit unlocks van andere locaties
+    s.locations.forEach(l => {
+      if (l.unlocks) l.unlocks = l.unlocks.filter(id => id !== loc.id);
+    });
+    await saveCurrentScenario();
+    closeSheet();
+    renderMap();
+    toast('Locatie verwijderd');
+  });
+}
+
+// ───────────────────────────────────────────────
+// RECORDING
+// ───────────────────────────────────────────────
+async function startRecording(locId) {
+  recordingState.targetLocationId = locId;
+  document.getElementById('record-modal').classList.add('visible');
+  document.getElementById('record-label').value = '';
+  document.getElementById('record-circle').classList.remove('recording');
+  document.getElementById('record-circle').innerHTML = '●';
+  document.getElementById('record-timer').textContent = '00:00';
+  document.getElementById('record-preview').classList.remove('visible');
+  recordingState.blob = null;
+  recordingState.chunks = [];
+
+  // Vraag microfoon-permissie en bouw recorder
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Probeer een formaat dat overal werkt
+    let mimeType = 'audio/webm';
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = 'audio/mp4'; // safari
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = ''; // default
+      }
+    }
+    recordingState.recorder = new MediaRecorder(stream, mimeType ? {mimeType} : undefined);
+    recordingState.mimeType = recordingState.recorder.mimeType || 'audio/webm';
+    recordingState.stream = stream;
+    recordingState.recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordingState.chunks.push(e.data);
+    };
+    recordingState.recorder.onstop = () => {
+      const blob = new Blob(recordingState.chunks, { type: recordingState.mimeType });
+      recordingState.blob = blob;
+      const url = URL.createObjectURL(blob);
+      const audio = document.getElementById('record-audio');
+      audio.src = url;
+      document.getElementById('record-preview').classList.add('visible');
+      // Stop stream
+      stream.getTracks().forEach(t => t.stop());
+    };
+  } catch(e) {
+    alert('Microfoon-toegang geweigerd of niet beschikbaar: ' + e.message);
+    cancelRecording();
+  }
+}
+
+function toggleRecording() {
+  if (!recordingState.recorder) return;
+  if (recordingState.recorder.state === 'recording') {
+    // Stop
+    recordingState.recorder.stop();
+    document.getElementById('record-circle').classList.remove('recording');
+    document.getElementById('record-circle').innerHTML = '●';
+    clearInterval(recordingState.timerInterval);
+  } else if (recordingState.recorder.state === 'inactive' && !recordingState.blob) {
+    // Start
+    recordingState.chunks = [];
+    recordingState.recorder.start();
+    recordingState.startTime = Date.now();
+    document.getElementById('record-circle').classList.add('recording');
+    document.getElementById('record-circle').innerHTML = '◼';
+    recordingState.timerInterval = setInterval(() => {
+      const sec = Math.floor((Date.now() - recordingState.startTime) / 1000);
+      const mm = String(Math.floor(sec/60)).padStart(2,'0');
+      const ss = String(sec%60).padStart(2,'0');
+      document.getElementById('record-timer').textContent = `${mm}:${ss}`;
+    }, 200);
+  }
+}
+
+function discardRecording() {
+  recordingState.blob = null;
+  recordingState.chunks = [];
+  document.getElementById('record-preview').classList.remove('visible');
+  document.getElementById('record-timer').textContent = '00:00';
+  // Stop active stream if any
+  if (recordingState.stream) {
+    recordingState.stream.getTracks().forEach(t => t.stop());
+    recordingState.stream = null;
+  }
+  // Start opnieuw (nieuwe stream)
+  startRecording(recordingState.targetLocationId);
+}
+
+async function saveRecording() {
+  if (!recordingState.blob) return;
+  const label = document.getElementById('record-label').value.trim() || 'Verteller';
+  const audioId = 'aud-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+  const durationSec = Math.floor((Date.now() - recordingState.startTime) / 1000);
+
+  // Sla audio op in IndexedDB
+  await dbPut('audio', {
+    id: audioId,
+    blob: recordingState.blob,
+    mimeType: recordingState.mimeType,
+    createdAt: Date.now()
+  });
+
+  // Voeg toe aan locatie
+  const s = getCurrentScenario();
+  const loc = s.locations.find(l => l.id === recordingState.targetLocationId);
+  if (loc) {
+    loc.segments.push({
+      id: 'seg-' + Date.now(),
+      audioId,
+      speakerLabel: label,
+      durationSec
+    });
+    await saveCurrentScenario();
+    renderSegmentsList(loc);
+  }
+
+  cancelRecording();
+  toast('Opname opgeslagen');
+}
+
+function cancelRecording() {
+  if (recordingState.recorder && recordingState.recorder.state === 'recording') {
+    recordingState.recorder.stop();
+  }
+  if (recordingState.stream) {
+    recordingState.stream.getTracks().forEach(t => t.stop());
+    recordingState.stream = null;
+  }
+  clearInterval(recordingState.timerInterval);
+  recordingState.recorder = null;
+  recordingState.blob = null;
+  recordingState.chunks = [];
+  document.getElementById('record-modal').classList.remove('visible');
+}
+
+// ───────────────────────────────────────────────
+// PLAY MODE
+// ───────────────────────────────────────────────
+function setMode(newMode) {
+  mode = newMode;
+  document.getElementById('btn-mode-build').classList.toggle('active', mode === 'build');
+  document.getElementById('btn-mode-play').classList.toggle('active', mode === 'play');
+  closeSheet();
+  closePlaySheet();
+  stopCurrentAudio();
+  updateFabVisibility();
+
+  if (mode === 'play') {
+    // Reset progressie en ontgrendel automatisch alleen de eerste locatie
+    visitedIds.clear();
+    unlockedIds.clear();
+    const s = getCurrentScenario();
+    if (s && s.locations.length > 0) {
+      unlockedIds.add(s.locations[0].id);
+    }
+    toast('Speel-modus — eerste locatie ontgrendeld');
+  } else {
+    toast('Bouw-modus');
+  }
+  renderMap();
+}
+
+function updateFabVisibility() {
+  const fab = document.getElementById('fab');
+  if (mode === 'build' && getCurrentScenario()) {
+    fab.classList.remove('hidden');
+  } else {
+    fab.classList.add('hidden');
+  }
+}
+
+function checkGeofences() {
+  if (!playerPos || mode !== 'play') return;
+  const s = getCurrentScenario();
+  if (!s) return;
+  s.locations.forEach((loc, idx) => {
+    const isFirst = idx === 0;
+    const isUnlocked = unlockedIds.has(loc.id) || isFirst;
+    if (!isUnlocked) return;
+    if (visitedIds.has(loc.id)) return;
+    if (activePlayLocation && activePlayLocation.id === loc.id) return;
+    const dist = distanceBetween(playerPos.lat, playerPos.lng, loc.lat, loc.lng);
+    if (dist <= (loc.radius || 25)) {
+      activatePlayLocation(loc);
+    }
+  });
+}
+
+function distanceBetween(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function activatePlayLocation(loc) {
+  activePlayLocation = loc;
+  playSegmentIdx = 0;
+  if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
+  document.getElementById('play-location-name').textContent = loc.name;
+  document.getElementById('play-chapter-title').textContent = loc.chapterTitle || loc.chapter || '';
+  document.getElementById('play-counter').textContent = `0/${loc.segments.length}`;
+  document.getElementById('play-progress-fill').style.width = '0%';
+  document.getElementById('play-speaker').textContent = '';
+  document.getElementById('play-sheet').classList.add('visible');
+  document.getElementById('play-btn').textContent = '▶';
+}
+
+function closePlaySheet() {
+  document.getElementById('play-sheet').classList.remove('visible');
+  stopCurrentAudio();
+}
+
+async function playToggle() {
+  if (!activePlayLocation) return;
+  if (currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    document.getElementById('play-btn').textContent = '▶';
+  } else if (currentAudio && currentAudio.currentTime > 0 && !currentAudio.ended) {
+    currentAudio.play();
+    document.getElementById('play-btn').textContent = '⏸';
+  } else {
+    await playNextSegmentInPlayMode();
+  }
+}
+
+async function playNextSegmentInPlayMode() {
+  if (!activePlayLocation) return;
+  if (playSegmentIdx >= activePlayLocation.segments.length) {
+    onPlayLocationComplete();
+    return;
+  }
+  const seg = activePlayLocation.segments[playSegmentIdx];
+  document.getElementById('play-speaker').textContent = '🗣  ' + (seg.speakerLabel || 'Verteller');
+  document.getElementById('play-counter').textContent = `${playSegmentIdx+1}/${activePlayLocation.segments.length}`;
+
+  const audioRec = await dbGet('audio', seg.audioId);
+  if (!audioRec) {
+    toast('Audio niet gevonden');
+    playSegmentIdx++;
+    setTimeout(playNextSegmentInPlayMode, 300);
+    return;
+  }
+
+  if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+  currentAudioUrl = URL.createObjectURL(audioRec.blob);
+  currentAudio = new Audio(currentAudioUrl);
+  currentAudio.onended = () => {
+    playSegmentIdx++;
+    const totalSegs = activePlayLocation.segments.length;
+    const pct = (playSegmentIdx / totalSegs) * 100;
+    document.getElementById('play-progress-fill').style.width = pct + '%';
+    setTimeout(playNextSegmentInPlayMode, 500);
+  };
+  currentAudio.ontimeupdate = () => {
+    if (!currentAudio.duration) return;
+    const segProgress = currentAudio.currentTime / currentAudio.duration;
+    const totalSegs = activePlayLocation.segments.length;
+    const overall = ((playSegmentIdx + segProgress) / totalSegs) * 100;
+    document.getElementById('play-progress-fill').style.width = overall + '%';
+  };
+  currentAudio.onerror = () => {
+    toast('Afspeelfout');
+    playSegmentIdx++;
+    setTimeout(playNextSegmentInPlayMode, 300);
+  };
+
+  try {
+    await currentAudio.play();
+    document.getElementById('play-btn').textContent = '⏸';
+  } catch(e) {
+    toast('Tik nogmaals om af te spelen');
+    document.getElementById('play-btn').textContent = '▶';
+  }
+}
+
+function stopCurrentAudio() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  if (currentAudioUrl) {
+    URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+  }
+  clearInterval(playProgressTimer);
+}
+
+async function onPlayLocationComplete() {
+  if (!activePlayLocation) return;
+  visitedIds.add(activePlayLocation.id);
+  // Unlock alles wat deze locatie ontgrendelt
+  (activePlayLocation.unlocks||[]).forEach(id => unlockedIds.add(id));
+  document.getElementById('play-progress-fill').style.width = '100%';
+  document.getElementById('play-btn').textContent = '↺';
+  playSegmentIdx = 0; // klaar voor replay
+  toast('Locatie voltooid');
+  renderMap();
+}
+
+// ───────────────────────────────────────────────
+// AUDIO PREVIEW (build mode)
+// ───────────────────────────────────────────────
+let previewAudio = null;
+let previewUrl = null;
+async function playSegmentPreview(audioId) {
+  if (previewAudio && !previewAudio.paused) {
+    previewAudio.pause();
+    previewAudio = null;
+    return;
+  }
+  const rec = await dbGet('audio', audioId);
+  if (!rec) { toast('Audio niet gevonden'); return; }
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(rec.blob);
+  previewAudio = new Audio(previewUrl);
+  previewAudio.play().catch(e => toast('Tik nogmaals om af te spelen'));
+}
+
+// ───────────────────────────────────────────────
+// CONFIRM DIALOG
+// ───────────────────────────────────────────────
+let confirmCallback = null;
+function showConfirm(title, message, callback) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  document.getElementById('confirm-dialog').classList.add('visible');
+  confirmCallback = callback;
+}
+function confirmOk() {
+  document.getElementById('confirm-dialog').classList.remove('visible');
+  if (confirmCallback) confirmCallback();
+  confirmCallback = null;
+}
+function confirmCancel() {
+  document.getElementById('confirm-dialog').classList.remove('visible');
+  confirmCallback = null;
+}
+
+// ───────────────────────────────────────────────
+// UTIL
+// ───────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove('visible'), 2200);
+}
+
+// ───────────────────────────────────────────────
+// BOOT
+// ───────────────────────────────────────────────
+async function boot() {
+  try {
+    db = await openDB();
+  } catch(e) {
+    alert('Kan database niet openen: ' + e.message);
+    return;
+  }
+  initMap();
+  initGPS();
+  await loadScenarios();
+}
+
+boot();
+</script>
+</body>
+</html>
